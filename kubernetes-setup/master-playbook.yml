@@ -1,0 +1,30 @@
+---
+- hosts: all
+  become: true
+  tasks:
+  - name: Initialize the Kubernetes cluster using kubeadm
+    command: kubeadm init --apiserver-advertise-address="192.168.50.10" --pod-network-cidr=10.244.0.0/16
+
+## Setup the kube config file for the vagrant user to access the Kubernetes cluster 
+
+  - name: Setup kubeconfig for vagrant user
+    command: "{{ item }}"
+    with_items:
+     - mkdir -p /home/vagrant/.kube
+     - cp -i /etc/kubernetes/admin.conf /home/vagrant/.kube/config
+     - chown vagrant:vagrant /home/vagrant/.kube/config
+
+## Setup the container networking provider and the network policy engine 
+
+  - name: Install flannel pod network
+    become: true
+    command: su - vagrant -c "kubectl create -f /vagrant/kube-flannel.yml"
+
+## Generate kube join command for joining the node to the Kubernetes cluster and store the command in the file named join-command
+
+  - name: Generate join command
+    command: kubeadm token create --print-join-command
+    register: join_command
+
+  - name: Copy join command to local file
+    local_action: copy content="{{ join_command.stdout_lines[0] }}" dest="./join-command"
